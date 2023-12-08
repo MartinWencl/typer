@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 crossterm = "0.27.0"
+lazy_static = "*"
+clap = {version = "3.1.6", features = ["derive"] }

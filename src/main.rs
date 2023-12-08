@@ -4,48 +4,75 @@ extern crate crossterm;
 use crossterm::{
     cursor,
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
-    style::{self, Attribute, Color, Print, ResetColor, SetForegroundColor, Stylize},
-    terminal::{self, size, SetSize},
+    style::{self, Color, Print, ResetColor, SetForegroundColor, SetBackgroundColor},
+    terminal::{self, size},
     ExecutableCommand, QueueableCommand,
 };
 use std::io::{self, Error, Result, Write};
-use std::time;
 
-fn redraw() -> io::Result<()> {
-    let mut stdout = io::stdout();
+#[macro_use]
+extern crate clap;
+use clap::{Parser, command, Args};
 
-    stdout.execute(cursor::MoveTo(5, 5))?;
-    // save and later restore the curser pos, as it could break the render
-    stdout
-        .execute(cursor::SavePosition)?
-        .execute(cursor::DisableBlinking)?
-        .execute(cursor::Hide)?
-        .execute(terminal::Clear(terminal::ClearType::FromCursorUp))?;
-
-    stdout.write(b"Test text lorem ipsum color amet")?;
-    stdout.flush()?;
-
-    stdout
-        .execute(cursor::RestorePosition)?
-        .execute(cursor::EnableBlinking)?
-        .execute(cursor::Show)?;
-    Ok(())
+#[derive(Parser)]
+struct MyArgs {
+    frase: String,
 }
 
-fn print_char(c: char) {
+#[derive(Clone, Debug)]
+struct Frase {
+    chars: String,
+    current: usize,
+}
+
+impl Frase {
+    fn new(s: &str) -> Self {
+        Self {
+            chars: String::from(s),
+            current: 0,
+        }
+    }
+
+    fn current_char(&self) -> char {
+        self.chars.chars().nth(self.current).unwrap()
+    }
+
+    fn check_char(&mut self, c :char) -> bool {
+       if c == self.current_char() {
+            self.current += 1;
+            return true;
+        } 
+        return false;
+    }
+}
+
+fn print_char(c: char, frase: &mut Frase) {
+    let mut stdout = io::stdout();
     let mut color = Color::Red;
-    if c == 'a' {
+    let mut c = c;
+    let mut offset = 0;
+    let mut background_color = Color::Black;
+    if frase.check_char(c) {
         color = Color::Green;
     }
+    else {
+        c = frase.current_char();
+        offset = 1;
+        background_color = Color::Red;
+        color = Color::Black
+    }
+    
+    stdout.execute(cursor::MoveTo(offset + <usize as TryInto<u16>>::try_into(frase.current).unwrap(), 0));
     execute!(
         io::stdout(),
         SetForegroundColor(color),
+        SetBackgroundColor(background_color),
         Print(format!("{}", c).to_string()),
         ResetColor
     );
 }
 
-fn handle_key(key_event: KeyEvent) {
+fn handle_key(key_event: KeyEvent, frase: &mut Frase) {
     // TODO: add error handling, somehow to be ok with return types in the match in main
     let mut stdout = io::stdout();
     let code = key_event.code;
@@ -54,7 +81,7 @@ fn handle_key(key_event: KeyEvent) {
     stdout.execute(cursor::Show);
 
     match code {
-        KeyCode::Char(c) => print_char(c),
+        KeyCode::Char(c) => print_char(c, frase),
         _ => (),
     };
     terminal::enable_raw_mode();
@@ -65,14 +92,24 @@ fn execute_command() {
 }
 
 fn main() -> io::Result<()> {
+    let args = MyArgs::parse();
+
     let mut stdout = io::stdout();
     let (cols, rows) = size()?;
-    let exit = false;
-    let one_sec = time::Duration::from_secs(1);
 
-    let position = 0;
+    let mut frase = Frase::new(&args.frase);
+
 
     stdout.execute(terminal::Clear(terminal::ClearType::All))?;
+    stdout.execute(cursor::SavePosition);
+    stdout.execute(cursor::MoveTo(1, 0));
+    execute!(
+        io::stdout(),
+        SetForegroundColor(Color::Magenta),
+        Print(format!("{}", frase.chars).to_string()),
+        ResetColor
+    );
+    stdout.execute(cursor::RestorePosition);
     // .execute(cursor::DisableBlinking)?
     // .execute(cursor::Hide)?;
 
@@ -81,7 +118,6 @@ fn main() -> io::Result<()> {
     terminal::enable_raw_mode()?;
 
     loop {
-        // redraw()?;
         let ev = event::read().unwrap();
         match ev {
             // overloading ^C to break out of the loop and exit
@@ -103,10 +139,10 @@ fn main() -> io::Result<()> {
                 ..
             }) => execute_command(),
             // other keys with no modifiers handling
-            Event::Key(k) => handle_key(k),
+            Event::Key(k) => handle_key(k, &mut frase),
             _ => (),
         }
     }
-    // terminal::disable_raw_mode()?;
+    terminal::disable_raw_mode()?;
     Ok(())
 }
