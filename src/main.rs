@@ -4,7 +4,7 @@ extern crate crossterm;
 use crossterm::{
     cursor,
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
-    style::{self, Color, Print, ResetColor, SetForegroundColor, SetBackgroundColor},
+    style::{self, Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
     terminal::{self, size},
     ExecutableCommand, QueueableCommand,
 };
@@ -12,7 +12,7 @@ use std::io::{self, Error, Result, Write};
 
 #[macro_use]
 extern crate clap;
-use clap::{Parser, command, Args};
+use clap::{command, Args, Parser};
 
 #[derive(Parser)]
 struct MyArgs {
@@ -34,57 +34,75 @@ impl Frase {
     }
 
     fn current_char(&self) -> char {
-        self.chars.chars().nth(self.current).unwrap()
+        let mut char = self.chars.chars().nth(self.current).unwrap();
+        if char == ' ' {
+            char = '·';
+        }
+        char
     }
 
-    fn check_char(&mut self, c :char) -> bool {
-       if c == self.current_char() {
-            self.current += 1;
+    fn check_char(&mut self, c: char) -> bool {
+        if c == self.chars.chars().nth(self.current).unwrap() {
             return true;
-        } 
+        }
         return false;
     }
+
+    fn increment(&mut self) {
+        self.current += 1;
+    }
 }
 
-fn print_char(c: char, frase: &mut Frase) {
+fn print_char(c: char, frase: &mut Frase) -> Result<()> {
     let mut stdout = io::stdout();
-    let mut color = Color::Red;
     let mut c = c;
-    let mut offset = 0;
-    let mut background_color = Color::Black;
+
     if frase.check_char(c) {
-        color = Color::Green;
-    }
-    else {
+        stdout.execute(cursor::MoveTo(
+            1 + <usize as TryInto<u16>>::try_into(frase.current).unwrap(),
+            0,
+        ))?;
+        execute!(
+            io::stdout(),
+            SetForegroundColor(Color::Green),
+            Print(format!("{}", c).to_string()),
+            ResetColor
+        )?;
+        frase.increment();
+    } else {
         c = frase.current_char();
-        offset = 1;
-        background_color = Color::Red;
-        color = Color::Black
+
+        stdout.execute(cursor::SavePosition)?;
+        stdout.execute(cursor::MoveTo(
+            1 + <usize as TryInto<u16>>::try_into(frase.current).unwrap(),
+            0,
+        ))?;
+        execute!(
+            io::stdout(),
+            SetForegroundColor(Color::Red),
+            SetBackgroundColor(Color::Red),
+            Print(format!("{}", c).to_string()),
+            ResetColor
+        )?;
+        stdout.execute(cursor::RestorePosition)?;
     }
-    
-    stdout.execute(cursor::MoveTo(offset + <usize as TryInto<u16>>::try_into(frase.current).unwrap(), 0));
-    execute!(
-        io::stdout(),
-        SetForegroundColor(color),
-        SetBackgroundColor(background_color),
-        Print(format!("{}", c).to_string()),
-        ResetColor
-    );
+    Ok(())
 }
 
-fn handle_key(key_event: KeyEvent, frase: &mut Frase) {
+fn handle_key(key_event: KeyEvent, frase: &mut Frase) -> Result<()>{
     // TODO: add error handling, somehow to be ok with return types in the match in main
     let mut stdout = io::stdout();
     let code = key_event.code;
 
-    terminal::disable_raw_mode();
-    stdout.execute(cursor::Show);
+    terminal::disable_raw_mode()?;
+    stdout.execute(cursor::Show)?;
 
     match code {
-        KeyCode::Char(c) => print_char(c, frase),
+        KeyCode::Char(c) => print_char(c, frase)?,
         _ => (),
     };
-    terminal::enable_raw_mode();
+    terminal::enable_raw_mode()?;
+    Ok(())
 }
 
 fn execute_command() {
@@ -95,26 +113,21 @@ fn main() -> io::Result<()> {
     let args = MyArgs::parse();
 
     let mut stdout = io::stdout();
-    let (cols, rows) = size()?;
+    // let (cols, rows) = size()?;
 
     let mut frase = Frase::new(&args.frase);
 
-
     stdout.execute(terminal::Clear(terminal::ClearType::All))?;
-    stdout.execute(cursor::SavePosition);
-    stdout.execute(cursor::MoveTo(1, 0));
+    stdout.execute(cursor::SavePosition)?;
+    stdout.execute(cursor::MoveTo(1, 0))?;
     execute!(
         io::stdout(),
         SetForegroundColor(Color::Magenta),
-        Print(format!("{}", frase.chars).to_string()),
+        Print(format!("{}", frase.chars.replace(" ", "·")).to_string()),
         ResetColor
-    );
-    stdout.execute(cursor::RestorePosition);
-    // .execute(cursor::DisableBlinking)?
-    // .execute(cursor::Hide)?;
+    )?;
+    stdout.execute(cursor::RestorePosition)?;
 
-    // TODO: is raw mode needed? It would be nicer with it, but it causes the one key behing
-    // priting
     terminal::enable_raw_mode()?;
 
     loop {
@@ -139,7 +152,7 @@ fn main() -> io::Result<()> {
                 ..
             }) => execute_command(),
             // other keys with no modifiers handling
-            Event::Key(k) => handle_key(k, &mut frase),
+            Event::Key(k) => handle_key(k, &mut frase).unwrap(),
             _ => (),
         }
     }
