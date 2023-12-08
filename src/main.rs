@@ -10,9 +10,7 @@ use crossterm::{
 };
 use std::io::{self, Error, Result, Write};
 
-#[macro_use]
-extern crate clap;
-use clap::{command, Args, Parser};
+use clap::Parser;
 
 #[derive(Parser)]
 struct MyArgs {
@@ -53,44 +51,43 @@ impl Frase {
     }
 }
 
-fn print_char(c: char, frase: &mut Frase) -> Result<()> {
+#[derive(Debug)]
+struct Stats {
+    mistakes: u32,
+}
+
+
+fn print_char(c: char, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
     let mut stdout = io::stdout();
     let mut c = c;
+    let (col, row) = cursor::position()?;
 
     if frase.check_char(c) {
-        stdout.execute(cursor::MoveTo(
-            1 + <usize as TryInto<u16>>::try_into(frase.current).unwrap(),
-            0,
-        ))?;
         execute!(
             io::stdout(),
             SetForegroundColor(Color::Green),
             Print(format!("{}", c).to_string()),
             ResetColor
         )?;
+        stdout.execute(cursor::MoveTo(col + 1, row))?;
         frase.increment();
     } else {
         c = frase.current_char();
+        stats.mistakes += 1;
 
-        stdout.execute(cursor::SavePosition)?;
-        stdout.execute(cursor::MoveTo(
-            1 + <usize as TryInto<u16>>::try_into(frase.current).unwrap(),
-            0,
-        ))?;
         execute!(
             io::stdout(),
-            SetForegroundColor(Color::Red),
-            SetBackgroundColor(Color::Red),
+            SetBackgroundColor(Color::DarkRed),
+            SetForegroundColor(Color::DarkRed),
             Print(format!("{}", c).to_string()),
             ResetColor
         )?;
-        stdout.execute(cursor::RestorePosition)?;
+        stdout.execute(cursor::MoveTo(col, row))?;
     }
     Ok(())
 }
 
-fn handle_key(key_event: KeyEvent, frase: &mut Frase) -> Result<()>{
-    // TODO: add error handling, somehow to be ok with return types in the match in main
+fn handle_key(key_event: KeyEvent, frase: &mut Frase, stats: &mut Stats) -> Result<()>{
     let mut stdout = io::stdout();
     let code = key_event.code;
 
@@ -98,7 +95,7 @@ fn handle_key(key_event: KeyEvent, frase: &mut Frase) -> Result<()>{
     stdout.execute(cursor::Show)?;
 
     match code {
-        KeyCode::Char(c) => print_char(c, frase)?,
+        KeyCode::Char(c) => print_char(c, frase, stats)?,
         _ => (),
     };
     terminal::enable_raw_mode()?;
@@ -116,21 +113,30 @@ fn main() -> io::Result<()> {
     // let (cols, rows) = size()?;
 
     let mut frase = Frase::new(&args.frase);
+    let mut stats = Stats { mistakes : 0 };
 
     stdout.execute(terminal::Clear(terminal::ClearType::All))?;
-    stdout.execute(cursor::SavePosition)?;
-    stdout.execute(cursor::MoveTo(1, 0))?;
+    stdout.execute(cursor::MoveTo(1, 1))?;
     execute!(
         io::stdout(),
-        SetForegroundColor(Color::Magenta),
+        SetForegroundColor(Color::White),
         Print(format!("{}", frase.chars.replace(" ", "·")).to_string()),
         ResetColor
     )?;
-    stdout.execute(cursor::RestorePosition)?;
+    stdout.execute(cursor::MoveTo(1, 1))?;
 
     terminal::enable_raw_mode()?;
 
     loop {
+        stdout.execute(cursor::SavePosition)?;
+        stdout.execute(cursor::MoveTo(1, 0))?;
+        execute!(
+            io::stdout(),
+            SetForegroundColor(Color::White),
+            Print(format!("Mistakes: {}", &stats.mistakes.to_string())),
+            ResetColor
+        )?;
+        stdout.execute(cursor::RestorePosition)?;
         let ev = event::read().unwrap();
         match ev {
             // overloading ^C to break out of the loop and exit
@@ -152,7 +158,7 @@ fn main() -> io::Result<()> {
                 ..
             }) => execute_command(),
             // other keys with no modifiers handling
-            Event::Key(k) => handle_key(k, &mut frase).unwrap(),
+            Event::Key(k) => handle_key(k, &mut frase, &mut stats).unwrap(),
             _ => (),
         }
     }
