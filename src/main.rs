@@ -4,13 +4,12 @@ extern crate crossterm;
 use crossterm::{
     cursor,
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
-    style::{self, Print, Stylize},
-    terminal, ExecutableCommand, QueueableCommand,
+    style::{self, Attribute, Color, Print, ResetColor, SetForegroundColor, Stylize},
+    terminal::{self, size, SetSize},
+    ExecutableCommand, QueueableCommand,
 };
-use std::{
-    io::{self, Write},
-};
-use std::{time};
+use std::io::{self, Error, Result, Write};
+use std::time;
 
 fn redraw() -> io::Result<()> {
     let mut stdout = io::stdout();
@@ -33,6 +32,19 @@ fn redraw() -> io::Result<()> {
     Ok(())
 }
 
+fn print_char(c: char) {
+    let mut color = Color::Red;
+    if c == 'a' {
+        color = Color::Green;
+    }
+    execute!(
+        io::stdout(),
+        SetForegroundColor(color),
+        Print(format!("{}", c).to_string()),
+        ResetColor
+    );
+}
+
 fn handle_key(key_event: KeyEvent) {
     // TODO: add error handling, somehow to be ok with return types in the match in main
     let mut stdout = io::stdout();
@@ -42,26 +54,33 @@ fn handle_key(key_event: KeyEvent) {
     stdout.execute(cursor::Show);
 
     match code {
-        KeyCode::Char(c) => stdout.write(&[c as u8]),
-        _ => Ok(0),
+        KeyCode::Char(c) => print_char(c),
+        _ => (),
     };
     terminal::enable_raw_mode();
 }
 
+fn execute_command() {
+    ()
+}
+
 fn main() -> io::Result<()> {
     let mut stdout = io::stdout();
-    let _exit = false;
-    let _one_sec = time::Duration::from_secs(1);
+    let (cols, rows) = size()?;
+    let exit = false;
+    let one_sec = time::Duration::from_secs(1);
 
-    let _position = 0;
+    let position = 0;
 
-    stdout
-        .execute(terminal::Clear(terminal::ClearType::All))?
-        .execute(cursor::DisableBlinking)?
-        .execute(cursor::Hide)?;
+    stdout.execute(terminal::Clear(terminal::ClearType::All))?;
+    // .execute(cursor::DisableBlinking)?
+    // .execute(cursor::Hide)?;
+
+    // TODO: is raw mode needed? It would be nicer with it, but it causes the one key behing
+    // priting
+    terminal::enable_raw_mode()?;
 
     loop {
-        terminal::enable_raw_mode()?;
         // redraw()?;
         let ev = event::read().unwrap();
         match ev {
@@ -77,22 +96,17 @@ fn main() -> io::Result<()> {
                 modifiers: KeyModifiers::CONTROL,
                 ..
             }) => break,
-            // TODO: add more control calls
-            // i.e reset current line, etc
+            // overloading `:` for vim-like commands
             Event::Key(KeyEvent {
-                code: KeyCode::Char('t'),
-                modifiers: KeyModifiers::ALT,
+                code: KeyCode::Char(':'),
+                modifiers: KeyModifiers::NONE,
                 ..
-            }) => execute!(
-                stdout,
-                terminal::Clear(terminal::ClearType::All),
-                Print("crossterm is cool")
-            )
-            .unwrap(),
+            }) => execute_command(),
+            // other keys with no modifiers handling
             Event::Key(k) => handle_key(k),
             _ => (),
         }
     }
-    terminal::disable_raw_mode()?;
+    // terminal::disable_raw_mode()?;
     Ok(())
 }
