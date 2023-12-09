@@ -36,22 +36,29 @@ impl Frase {
             if char == ' ' {
                 char = '·';
             }
-            return Some(char)
+            return Some(char);
         } else {
-            return None
+            return None;
         }
     }
 
-    fn check_char(&mut self, c: char) -> Option<bool>{
-        // TODO: There is a better way for sure - check the question mark operator 
+    fn check_char(&mut self, c: char) -> Option<bool> {
+        // TODO: There is a better way for sure - check the question mark operator
         if let Some(curr) = self.chars.chars().nth(self.current) {
             if c == curr {
                 return Some(true);
             }
             return Some(false);
         } else {
-            return None
+            return None;
         }
+    }
+
+    fn is_over(&self) -> bool {
+        if self.current >= self.chars.chars().count() {
+            return true
+        }
+        return false
     }
 
     fn increment(&mut self) {
@@ -73,7 +80,10 @@ fn print_char(c: char, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
 
     if is_correct.is_none() {
         terminal::enable_raw_mode()?;
-        return Err(io::Error::new(io::ErrorKind::NotFound, "The current char in the frase was not found!"));
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "The current char in the frase was not found!",
+        ));
     }
 
     // TODO: Replace this unwrap, even though it should be safe
@@ -85,7 +95,10 @@ fn print_char(c: char, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
         let current = frase.current_char();
         if current.is_none() {
             terminal::enable_raw_mode()?;
-            return Err(io::Error::new(io::ErrorKind::NotFound, "The current char in the frase was not found!"));
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "The current char in the frase was not found!",
+            ));
         }
         // TODO: Replace this unwrap, even though it should be safe
         c = current.unwrap();
@@ -132,6 +145,46 @@ fn execute_command() {
     ()
 }
 
+fn run(frase: &mut Frase, stats: &mut Stats) -> Result<()> {
+    let mut stdout = io::stdout();
+
+    loop {
+        if frase.is_over() {
+            break
+        }
+
+        print_mistake_counter(&stats)?;
+
+        let ev = event::read().unwrap();
+        match ev {
+            // overloading ^C to break out of the loop and exit
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('c'),
+                modifiers: KeyModifiers::CONTROL,
+                ..
+            }) => break,
+            // overloading ^D to break out of the loop and exit
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('d'),
+                modifiers: KeyModifiers::CONTROL,
+                ..
+            }) => break,
+            // overloading `:` for vim-like commands
+            Event::Key(KeyEvent {
+                code: KeyCode::Char(':'),
+                modifiers: KeyModifiers::NONE,
+                ..
+            }) => execute_command(),
+            // other keys with no modifiers handling
+            Event::Key(k) => handle_key(k, frase, stats)?,
+            _ => (),
+        }
+        // flush all the queried commands from this loops iteration
+        stdout.flush()?;
+    }
+    Ok(())
+}
+
 fn main() -> io::Result<()> {
     let args = MyArgs::parse();
 
@@ -157,37 +210,14 @@ fn main() -> io::Result<()> {
     stdout.flush()?;
 
     terminal::enable_raw_mode()?;
-    
-    loop {
-        print_mistake_counter(&stats)?;
 
-        let ev = event::read().unwrap();
-        match ev {
-            // overloading ^C to break out of the loop and exit
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('c'),
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            }) => break,
-            // overloading ^D to break out of the loop and exit
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('d'),
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            }) => break,
-            // overloading `:` for vim-like commands
-            Event::Key(KeyEvent {
-                code: KeyCode::Char(':'),
-                modifiers: KeyModifiers::NONE,
-                ..
-            }) => execute_command(),
-            // other keys with no modifiers handling
-            Event::Key(k) => handle_key(k, &mut frase, &mut stats)?,
-            _ => (),
-        }
-        // flush all the queried commands from this loops iteration
-        stdout.flush()?;
+    let result = run(&mut frase, &mut stats);
+    // Forcing disablibng raw_mode, otherwise fucks up your terminal
+    if result.is_err() {
+        terminal::disable_raw_mode()?;
+        return result
     }
+
     terminal::disable_raw_mode()?;
     Ok(())
 }
