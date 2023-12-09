@@ -31,19 +31,27 @@ impl Frase {
         }
     }
 
-    fn current_char(&self) -> char {
-        let mut char = self.chars.chars().nth(self.current).unwrap();
-        if char == ' ' {
-            char = '·';
+    fn current_char(&self) -> Option<char> {
+        if let Some(mut char) = self.chars.chars().nth(self.current) {
+            if char == ' ' {
+                char = '·';
+            }
+            return Some(char)
+        } else {
+            return None
         }
-        char
     }
 
-    fn check_char(&mut self, c: char) -> bool {
-        if c == self.chars.chars().nth(self.current).unwrap() {
-            return true;
+    fn check_char(&mut self, c: char) -> Option<bool>{
+        // TODO: There is a better way for sure - check the question mark operator 
+        if let Some(curr) = self.chars.chars().nth(self.current) {
+            if c == curr {
+                return Some(true);
+            }
+            return Some(false);
+        } else {
+            return None
         }
-        return false;
     }
 
     fn increment(&mut self) {
@@ -61,13 +69,26 @@ fn print_char(c: char, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
     let mut c = c;
     let (col, row) = cursor::position()?;
     let mut move_cursor = 0;
+    let is_correct = frase.check_char(c);
 
-    if frase.check_char(c) {
+    if is_correct.is_none() {
+        terminal::enable_raw_mode()?;
+        return Err(io::Error::new(io::ErrorKind::NotFound, "The current char in the frase was not found!"));
+    }
+
+    // TODO: Replace this unwrap, even though it should be safe
+    if is_correct.unwrap() {
         move_cursor = 1;
         frase.increment();
         stdout.queue(style::SetForegroundColor(Color::Green))?;
     } else {
-        c = frase.current_char();
+        let current = frase.current_char();
+        if current.is_none() {
+            terminal::enable_raw_mode()?;
+            return Err(io::Error::new(io::ErrorKind::NotFound, "The current char in the frase was not found!"));
+        }
+        // TODO: Replace this unwrap, even though it should be safe
+        c = current.unwrap();
         stats.mistakes += 1;
         stdout
             .queue(style::SetForegroundColor(Color::DarkRed))?
@@ -80,8 +101,8 @@ fn print_char(c: char, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
     Ok(())
 }
 
+// TODO: Merge into print_char
 fn handle_key(key_event: KeyEvent, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
-    let mut stdout = io::stdout();
     let code = key_event.code;
 
     match code {
@@ -161,7 +182,7 @@ fn main() -> io::Result<()> {
                 ..
             }) => execute_command(),
             // other keys with no modifiers handling
-            Event::Key(k) => handle_key(k, &mut frase, &mut stats).unwrap(),
+            Event::Key(k) => handle_key(k, &mut frase, &mut stats)?,
             _ => (),
         }
         // flush all the queried commands from this loops iteration
