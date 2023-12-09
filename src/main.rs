@@ -56,49 +56,54 @@ struct Stats {
     mistakes: u32,
 }
 
-
 fn print_char(c: char, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
     let mut stdout = io::stdout();
     let mut c = c;
     let (col, row) = cursor::position()?;
+    let mut move_cursor = 0;
 
     if frase.check_char(c) {
-        execute!(
-            io::stdout(),
-            SetForegroundColor(Color::Green),
-            Print(format!("{}", c).to_string()),
-            ResetColor
-        )?;
-        stdout.execute(cursor::MoveTo(col + 1, row))?;
+        move_cursor = 1;
         frase.increment();
+        stdout.queue(style::SetForegroundColor(Color::Green))?;
     } else {
         c = frase.current_char();
         stats.mistakes += 1;
-
-        execute!(
-            io::stdout(),
-            SetBackgroundColor(Color::DarkRed),
-            SetForegroundColor(Color::DarkRed),
-            Print(format!("{}", c).to_string()),
-            ResetColor
-        )?;
-        stdout.execute(cursor::MoveTo(col, row))?;
+        stdout
+            .queue(style::SetForegroundColor(Color::DarkRed))?
+            .queue(style::SetBackgroundColor(Color::DarkRed))?;
     }
+    stdout
+        .queue(style::Print(format!("{}", c).to_string()))?
+        .queue(cursor::MoveTo(col + move_cursor, row))?
+        .queue(style::ResetColor)?;
     Ok(())
 }
 
-fn handle_key(key_event: KeyEvent, frase: &mut Frase, stats: &mut Stats) -> Result<()>{
+fn handle_key(key_event: KeyEvent, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
     let mut stdout = io::stdout();
     let code = key_event.code;
-
-    terminal::disable_raw_mode()?;
-    stdout.execute(cursor::Show)?;
 
     match code {
         KeyCode::Char(c) => print_char(c, frase, stats)?,
         _ => (),
     };
-    terminal::enable_raw_mode()?;
+    Ok(())
+}
+
+fn print_mistake_counter(stats: &Stats) -> Result<()> {
+    let mut stdout = io::stdout();
+
+    stdout
+        .queue(cursor::SavePosition)?
+        .queue(cursor::MoveTo(1, 0))?
+        .queue(style::SetForegroundColor(Color::White))?
+        .queue(style::Print(format!(
+            "Mistakes: {}",
+            stats.mistakes.to_string()
+        )))?
+        .queue(style::ResetColor)?
+        .queue(cursor::RestorePosition)?;
     Ok(())
 }
 
@@ -113,30 +118,28 @@ fn main() -> io::Result<()> {
     // let (cols, rows) = size()?;
 
     let mut frase = Frase::new(&args.frase);
-    let mut stats = Stats { mistakes : 0 };
+    let mut stats = Stats { mistakes: 0 };
 
-    stdout.execute(terminal::Clear(terminal::ClearType::All))?;
-    stdout.execute(cursor::MoveTo(1, 1))?;
-    execute!(
-        io::stdout(),
-        SetForegroundColor(Color::White),
-        Print(format!("{}", frase.chars.replace(" ", "·")).to_string()),
-        ResetColor
-    )?;
-    stdout.execute(cursor::MoveTo(1, 1))?;
+    // Initiliaze the first screen
+    stdout
+        .queue(terminal::Clear(terminal::ClearType::All))?
+        .queue(cursor::MoveTo(1, 1))?
+        .queue(style::SetForegroundColor(Color::White))?
+        .queue(Print(
+            format!("{}", frase.chars.replace(" ", "·")).to_string(),
+        ))?
+        .queue(style::ResetColor)?
+        .queue(cursor::MoveTo(1, 1))?;
+
+    // Print the empty counter as part of first screen initialization
+    print_mistake_counter(&stats)?;
+    stdout.flush()?;
 
     terminal::enable_raw_mode()?;
-
+    
     loop {
-        stdout.execute(cursor::SavePosition)?;
-        stdout.execute(cursor::MoveTo(1, 0))?;
-        execute!(
-            io::stdout(),
-            SetForegroundColor(Color::White),
-            Print(format!("Mistakes: {}", &stats.mistakes.to_string())),
-            ResetColor
-        )?;
-        stdout.execute(cursor::RestorePosition)?;
+        print_mistake_counter(&stats)?;
+
         let ev = event::read().unwrap();
         match ev {
             // overloading ^C to break out of the loop and exit
@@ -161,6 +164,8 @@ fn main() -> io::Result<()> {
             Event::Key(k) => handle_key(k, &mut frase, &mut stats).unwrap(),
             _ => (),
         }
+        // flush all the queried commands from this loops iteration
+        stdout.flush()?;
     }
     terminal::disable_raw_mode()?;
     Ok(())
