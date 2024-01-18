@@ -14,7 +14,6 @@ struct MyArgs {
 
 fn main() -> io::Result<()> {
     let args = MyArgs::parse();
-    let mut stdout = io::stdout();
     let mut frase = Frase::new(&args.frase);
     let mut stats = Stats { mistakes: 0 };
   

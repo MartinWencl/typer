@@ -10,6 +10,7 @@ use std::io::{self, Result, Write};
 #[derive(Debug)]
 pub struct Frase {
     chars: String,
+    /// The current character pointer
     current: usize,
 }
 
@@ -19,6 +20,7 @@ pub struct Stats {
 }
 
 impl Frase {
+    /// Construct's Frase from the given string slice
     pub fn new(s: &str) -> Self {
         Self {
             chars: String::from(s),
@@ -26,6 +28,7 @@ impl Frase {
         }
     }
 
+    /// Return's character at the position of the current character pointer
     fn current_char(&self) -> Option<char> {
         if let Some(mut char) = self.chars.chars().nth(self.current) {
             if char == ' ' {
@@ -37,6 +40,8 @@ impl Frase {
         }
     }
 
+    /// Check's for the correctness of the supplied character by comparing with the character at the
+    /// position of the current character pointer
     fn check_char(&mut self, c: char) -> Option<bool> {
         // TODO: There is a better way for sure - check the question mark operator
         if let Some(curr) = self.chars.chars().nth(self.current) {
@@ -49,6 +54,7 @@ impl Frase {
         }
     }
 
+    /// Check's if the frase is over by comparing with the current character pointer
     fn is_over(&self) -> bool {
         if self.current >= self.chars.chars().count() {
             return true;
@@ -56,48 +62,55 @@ impl Frase {
         return false;
     }
 
+    /// Incremet's the current character pointer
     fn increment(&mut self) {
         self.current += 1;
     }
 }
 
+/// Print's the correct character in the frase - colored green or red based on comparision with the
+/// supplied char `c`. 
+/// updates frase (current character pointer) and stats accordingly
 fn print_char(c: char, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
     let mut stdout = io::stdout();
     let mut c = c;
     let (cols, _) = size()?;
     let (curr_col, curr_row) = cursor::position()?;
-    let is_correct = frase.check_char(c);
-
     let mut move_cursor = 0;
 
-    if is_correct.is_none() {
-        // terminal::enable_raw_mode()?;
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "The current char in the frase was not found!",
-        ));
+    let is_correct;
+    match frase.check_char(c) {
+        Some(value) => is_correct = value,
+        None => {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "The current char in the frase was not found!",
+            ))
+        }
     }
 
-    // TODO: Replace this unwrap, even though it should be safe
-    if is_correct.unwrap() {
+    // Correct: move cursor and increment frase pointer, set color
+    // Wrong: get correct char, increment mistakes, set color
+    if is_correct {
         move_cursor = 1;
         frase.increment();
         stdout.queue(style::SetForegroundColor(Color::Green))?;
     } else {
-        let current = frase.current_char();
-        if current.is_none() {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                "The current char in the frase was not found!",
-            ));
+        match frase.current_char() {
+            Some(value) => c = value,
+            None => {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "The current char in the frase was not found!",
+                ))
+            }
         }
-        // TODO: Replace this unwrap, even though it should be safe
-        c = current.unwrap();
         stats.mistakes += 1;
         stdout
             .queue(style::SetForegroundColor(Color::DarkRed))?
             .queue(style::SetBackgroundColor(Color::DarkRed))?;
     }
+
     stdout
         .queue(style::Print(format!("{}", c).to_string()))?
         .queue(cursor::MoveTo(curr_col + move_cursor, curr_row))?;
