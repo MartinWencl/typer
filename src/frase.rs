@@ -69,11 +69,22 @@ impl Frase {
 }
 
 /// Print's the correct character in the frase - colored green or red based on comparision with the
-/// supplied char `c`. 
+/// supplied char `c`.
 /// updates frase (current character pointer) and stats accordingly
-fn print_char(c: char, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
+fn queue_char_printing(key_event: KeyEvent, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
+    // Get the character itself
+    let mut c;
+    match key_event.code {
+        KeyCode::Char(char) => c = char,
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "Unexpected KeyCode! Not a Char.",
+            ))
+        }
+    };
+
     let mut stdout = io::stdout();
-    let mut c = c;
     let (cols, _) = size()?;
     let (curr_col, curr_row) = cursor::position()?;
     let mut move_cursor = 0;
@@ -124,18 +135,7 @@ fn print_char(c: char, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
     Ok(())
 }
 
-// TODO: Merge into print_char
-fn handle_key(key_event: KeyEvent, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
-    let code = key_event.code;
-
-    match code {
-        KeyCode::Char(c) => print_char(c, frase, stats)?,
-        _ => (),
-    };
-    Ok(())
-}
-
-fn print_mistake_counter(stats: &Stats) -> Result<()> {
+fn queue_mistake_counter(stats: &Stats) -> Result<()> {
     let mut stdout = io::stdout();
 
     stdout
@@ -174,7 +174,7 @@ pub fn run(frase: &mut Frase, stats: &mut Stats) -> Result<()> {
         .queue(cursor::MoveTo(0, 1))?;
 
     // Print the empty counter as part of first screen initialization
-    print_mistake_counter(&stats)?;
+    queue_mistake_counter(&stats)?;
     stdout.flush()?;
 
     loop {
@@ -183,7 +183,7 @@ pub fn run(frase: &mut Frase, stats: &mut Stats) -> Result<()> {
             break;
         }
 
-        print_mistake_counter(&stats)?;
+        queue_mistake_counter(&stats)?;
 
         let ev = event::read().unwrap();
         match ev {
@@ -206,7 +206,7 @@ pub fn run(frase: &mut Frase, stats: &mut Stats) -> Result<()> {
                 ..
             }) => execute_command(),
             // other keys with no modifiers handling
-            Event::Key(k) => handle_key(k, frase, stats)?,
+            Event::Key(k) => queue_char_printing(k, frase, stats)?,
             _ => (),
         }
         // flush all the queried commands from this loops iteration
