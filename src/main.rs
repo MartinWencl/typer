@@ -17,7 +17,7 @@ struct MyArgs {
     frase: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct Frase {
     chars: String,
     current: usize,
@@ -56,9 +56,9 @@ impl Frase {
 
     fn is_over(&self) -> bool {
         if self.current >= self.chars.chars().count() {
-            return true
+            return true;
         }
-        return false
+        return false;
     }
 
     fn increment(&mut self) {
@@ -71,15 +71,22 @@ struct Stats {
     mistakes: u32,
 }
 
+#[derive(Debug)]
+struct Cursor {
+    row: u16,
+    col: u16,
+}
+
 fn print_char(c: char, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
     let mut stdout = io::stdout();
     let mut c = c;
-    let (col, row) = cursor::position()?;
+    let (cols, rows) = size()?;
+    let (mut curr_col, mut curr_row) = cursor::position()?;
     let mut move_cursor = 0;
     let is_correct = frase.check_char(c);
 
     if is_correct.is_none() {
-        terminal::enable_raw_mode()?;
+        // terminal::enable_raw_mode()?;
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
             "The current char in the frase was not found!",
@@ -94,7 +101,6 @@ fn print_char(c: char, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
     } else {
         let current = frase.current_char();
         if current.is_none() {
-            terminal::enable_raw_mode()?;
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
                 "The current char in the frase was not found!",
@@ -109,8 +115,14 @@ fn print_char(c: char, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
     }
     stdout
         .queue(style::Print(format!("{}", c).to_string()))?
-        .queue(cursor::MoveTo(col + move_cursor, row))?
-        .queue(style::ResetColor)?;
+        .queue(cursor::MoveTo(curr_col + move_cursor, curr_row))?;
+
+    // Check if we are at the end of the line!
+    if curr_col + move_cursor >= cols {
+        stdout.queue(cursor::MoveTo(0, curr_row + 1))?;
+    }
+
+    stdout.queue(style::ResetColor)?;
     Ok(())
 }
 
@@ -149,8 +161,9 @@ fn run(frase: &mut Frase, stats: &mut Stats) -> Result<()> {
     let mut stdout = io::stdout();
 
     loop {
+        // Check if we are at the end
         if frase.is_over() {
-            break
+            break;
         }
 
         print_mistake_counter(&stats)?;
@@ -181,6 +194,23 @@ fn run(frase: &mut Frase, stats: &mut Stats) -> Result<()> {
         }
         // flush all the queried commands from this loops iteration
         stdout.flush()?;
+
+        // DEBUG - prints column info on the screen
+        // let (cols, rows) = size()?;
+        // let (curr_col, curr_row) = cursor::position()?;
+        // // Check if we are at the end of the line
+        // stdout
+        // .queue(cursor::SavePosition)?
+        // .queue(cursor::MoveTo(1, 5))?
+        // .queue(style::SetForegroundColor(Color::White))?
+        // .queue(style::Print(format!(
+        //     "col: {}, max cols: {}",
+        //     curr_col.to_string(),
+        //     cols.to_string(),
+        //     )))?
+        // .queue(style::ResetColor)?
+        // .queue(cursor::RestorePosition)?;
+        // stdout.flush()?;
     }
     Ok(())
 }
@@ -197,13 +227,17 @@ fn main() -> io::Result<()> {
     // Initiliaze the first screen
     stdout
         .queue(terminal::Clear(terminal::ClearType::All))?
-        .queue(cursor::MoveTo(1, 1))?
+        .queue(cursor::MoveTo(0, 1))?
         .queue(style::SetForegroundColor(Color::White))?
         .queue(Print(
+            // print the dots only at the initialization, the String in frase is still with spaces
+            // This means that once you get past the given space, the dot is again replaced
+            // with a space
+            // TODO: think about if I want to keep it that way or print dots when typed correctly
             format!("{}", frase.chars.replace(" ", "·")).to_string(),
         ))?
         .queue(style::ResetColor)?
-        .queue(cursor::MoveTo(1, 1))?;
+        .queue(cursor::MoveTo(0, 1))?;
 
     // Print the empty counter as part of first screen initialization
     print_mistake_counter(&stats)?;
@@ -211,13 +245,9 @@ fn main() -> io::Result<()> {
 
     terminal::enable_raw_mode()?;
 
+    // Run
     let result = run(&mut frase, &mut stats);
-    // Forcing disablibng raw_mode, otherwise fucks up your terminal
-    if result.is_err() {
-        terminal::disable_raw_mode()?;
-        return result
-    }
 
     terminal::disable_raw_mode()?;
-    Ok(())
+    result
 }
