@@ -151,10 +151,6 @@ fn queue_mistake_counter(stats: &Stats) -> Result<()> {
     Ok(())
 }
 
-fn execute_command() {
-    ()
-}
-
 pub fn run(frase: &mut Frase, stats: &mut Stats) -> Result<()> {
     let mut stdout = io::stdout();
 
@@ -199,12 +195,12 @@ pub fn run(frase: &mut Frase, stats: &mut Stats) -> Result<()> {
                 modifiers: KeyModifiers::CONTROL,
                 ..
             }) => break,
-            // overloading `:` for vim-like commands
+            // TODO: overloading `:` for vim-like commands
             Event::Key(KeyEvent {
                 code: KeyCode::Char(':'),
                 modifiers: KeyModifiers::NONE,
                 ..
-            }) => execute_command(),
+            }) => (),
             // other keys with no modifiers handling
             Event::Key(k) => queue_char_printing(k, frase, stats)?,
             _ => (),
