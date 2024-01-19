@@ -72,13 +72,13 @@ impl Frase {
 /// supplied char `c`.
 /// updates frase (current character pointer) and stats accordingly
 fn queue_char_printing(key_event: KeyEvent, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
-    // Get the character itself
+    // Get the character itself from the KeyEvent
     let mut c;
     match key_event.code {
         KeyCode::Char(char) => c = char,
         _ => {
             return Err(io::Error::new(
-                io::ErrorKind::NotFound,
+                io::ErrorKind::InvalidData,
                 "Unexpected KeyCode! Not a Char.",
             ))
         }
@@ -87,8 +87,12 @@ fn queue_char_printing(key_event: KeyEvent, frase: &mut Frase, stats: &mut Stats
     let mut stdout = io::stdout();
     let (cols, _) = size()?;
     let (curr_col, curr_row) = cursor::position()?;
+
+    // Variable storing the cursor movement, if the given char (pressed key) is correct,
+    // then we move, otherwise the cursor stays on the same char.
     let mut move_cursor = 0;
 
+    // Set `is_correct` according to the given char (pressed key)
     let is_correct;
     match frase.check_char(c) {
         Some(value) => is_correct = value,
@@ -107,6 +111,8 @@ fn queue_char_printing(key_event: KeyEvent, frase: &mut Frase, stats: &mut Stats
         frase.increment();
         stdout.queue(style::SetForegroundColor(Color::Green))?;
     } else {
+        // Get current char from frase - replace given char 
+        // we want to print the CORRECT char with red coloring
         match frase.current_char() {
             Some(value) => c = value,
             None => {
@@ -122,6 +128,7 @@ fn queue_char_printing(key_event: KeyEvent, frase: &mut Frase, stats: &mut Stats
             .queue(style::SetBackgroundColor(Color::DarkRed))?;
     }
 
+    // Reprint the char, always should be the correct one, just colored accordingly
     stdout
         .queue(style::Print(format!("{}", c).to_string()))?
         .queue(cursor::MoveTo(curr_col + move_cursor, curr_row))?;
