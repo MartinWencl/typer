@@ -8,14 +8,10 @@ mod frase;
 use crate::frase::{Frase, Stats, run};
 
 mod text;
-use crate::text::{get_text, TextVariants};
+use crate::text::{get_text};
 
-#[derive(Debug)]
-enum InputTypes {
-    Unknown,
-    Frase(String),
-    Letters(String),
-}
+mod types;
+use crate::types::{InputTypes, TextVariants};
 
 #[derive(Parser, Debug)]
 #[clap(author="Martin Wencl", version="0.0.1", about, long_about = None)]
@@ -26,6 +22,12 @@ struct MyArgs {
 
     #[clap(short, long, group="input")]
     letters: Option<String>,
+
+    #[clap(short, long, group="input")]
+    wordlist: Option<String>,
+
+    #[clap(short, group="input")]
+    test: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -38,12 +40,20 @@ fn main() -> io::Result<()> {
     if let Some(s) = &args.letters {
         input_type = InputTypes::Letters(s.to_string());
     }
+    if let Some(s) = &args.wordlist {
+        input_type = InputTypes::WordList(s.to_string());
+    }
+    if  args.test {
+        input_type = InputTypes::Test;
+    }
 
     let mut frase_str = String::new();
 
     match input_type {
         InputTypes::Frase(s) => frase_str = s,
         InputTypes::Letters(s) => frase_str = get_text(TextVariants::Letters(s.chars().collect())).unwrap(),
+        InputTypes::WordList(s) => frase_str = get_text(TextVariants::WordList(s.chars().collect())).unwrap(),
+        InputTypes::Test => frase_str = get_text(TextVariants::Test).unwrap(),
         _ => (),
     }
     
