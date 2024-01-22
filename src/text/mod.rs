@@ -8,7 +8,7 @@ mod wordlist_types;
 use wordlist_types::*;
 
 mod wordlist;
-use wordlist::{run}
+use wordlist::{run};
 
 const FOX_TEXT : &str = "The quick brown fox jumps over the lazy dog";
 const MIN_GENERATED_FRASE_LEN : u8 = 100;
@@ -18,7 +18,7 @@ const MAX_GENERATED_WORD_LEN : u8 = 8;
 pub fn get_text(variant: TextVariants) -> Result<String, io::Error> {
     match variant {
         TextVariants::Letters(vec) => Ok(generate_letter_word(vec)),
-        TextVariants::WordList(vec) => Ok("".to_string()),
+        TextVariants::WordList(vec) => Ok(run()),
         TextVariants::Test => Ok(FOX_TEXT.to_string()),
     }
 }
