@@ -6,17 +6,13 @@ use crossterm::{
     QueueableCommand,
 };
 use std::io::{self, Result, Write};
+use crate::types::{AlphabetStats, Outcomes};
 
 #[derive(Debug)]
 pub struct Frase {
     chars: String,
     /// The current character pointer
     current: usize,
-}
-
-#[derive(Debug)]
-pub struct Stats {
-    pub mistakes: u32,
 }
 
 impl Frase {
@@ -71,7 +67,7 @@ impl Frase {
 /// Print's the correct character in the frase - colored green or red based on comparision with the
 /// supplied char `c`.
 /// updates frase (current character pointer) and stats accordingly
-fn queue_char_printing(key_event: KeyEvent, frase: &mut Frase, stats: &mut Stats) -> Result<()> {
+fn queue_char_printing(key_event: KeyEvent, frase: &mut Frase, stats: &mut AlphabetStats) -> Result<()> {
     // Get the character itself from the KeyEvent
     let mut c;
     match key_event.code {
@@ -83,6 +79,8 @@ fn queue_char_printing(key_event: KeyEvent, frase: &mut Frase, stats: &mut Stats
             ))
         }
     };
+
+    log::info!("Recieved the char: \"{}\"", c);
 
     let mut stdout = io::stdout();
     let (cols, _) = size()?;
@@ -109,6 +107,7 @@ fn queue_char_printing(key_event: KeyEvent, frase: &mut Frase, stats: &mut Stats
     if is_correct {
         move_cursor = 1;
         frase.increment();
+        stats.increment(Outcomes::Correct, c);
         stdout.queue(style::SetForegroundColor(Color::Green))?;
     } else {
         // Get current char from frase - replace given char 
@@ -122,7 +121,7 @@ fn queue_char_printing(key_event: KeyEvent, frase: &mut Frase, stats: &mut Stats
                 ))
             }
         }
-        stats.mistakes += 1;
+        stats.increment(Outcomes::Wrong, c);
         stdout
             .queue(style::SetForegroundColor(Color::DarkRed))?
             .queue(style::SetBackgroundColor(Color::DarkRed))?;
@@ -142,7 +141,7 @@ fn queue_char_printing(key_event: KeyEvent, frase: &mut Frase, stats: &mut Stats
     Ok(())
 }
 
-fn queue_mistake_counter(stats: &Stats) -> Result<()> {
+fn queue_mistake_counter(stats: &AlphabetStats) -> Result<()> {
     let mut stdout = io::stdout();
 
     stdout
@@ -150,15 +149,16 @@ fn queue_mistake_counter(stats: &Stats) -> Result<()> {
         .queue(cursor::MoveTo(1, 0))?
         .queue(style::SetForegroundColor(Color::White))?
         .queue(style::Print(format!(
-            "Mistakes: {}",
-            stats.mistakes.to_string()
+            "Mistakes: {}  Percentage: {}",
+            stats.get_mistakes().to_string(),
+            stats.get_succes_precentage().to_string()
         )))?
         .queue(style::ResetColor)?
         .queue(cursor::RestorePosition)?;
     Ok(())
 }
 
-pub fn run(frase: &mut Frase, stats: &mut Stats) -> Result<()> {
+pub fn run(frase: &mut Frase, stats: &mut AlphabetStats) -> Result<()> {
     let mut stdout = io::stdout();
 
     // Initiliaze the first screen
@@ -175,6 +175,7 @@ pub fn run(frase: &mut Frase, stats: &mut Stats) -> Result<()> {
         ))?
         .queue(style::ResetColor)?
         .queue(cursor::MoveTo(0, 1))?;
+    log::info!("Printing frase: {}", frase.chars.replace(" ", "·").to_string());
 
     // Print the empty counter as part of first screen initialization
     queue_mistake_counter(&stats)?;
@@ -185,8 +186,6 @@ pub fn run(frase: &mut Frase, stats: &mut Stats) -> Result<()> {
         if frase.is_over() {
             break;
         }
-
-        queue_mistake_counter(&stats)?;
 
         let ev = event::read().unwrap();
         match ev {
@@ -212,6 +211,7 @@ pub fn run(frase: &mut Frase, stats: &mut Stats) -> Result<()> {
             Event::Key(k) => queue_char_printing(k, frase, stats)?,
             _ => (),
         }
+        queue_mistake_counter(&stats)?;
         // flush all the queried commands from this loops iteration
         stdout.flush()?;
     }

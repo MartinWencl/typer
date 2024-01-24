@@ -1648,7 +1648,7 @@ message
 metal
 meter
 method
-Mexican
+exican
 middle
 might
 military
@@ -1699,9 +1699,9 @@ mouth
 move
 movement
 movie
-Mr
-Mrs
-Ms
+r
+rs
+s
 much
 multiple
 murder
@@ -1710,7 +1710,7 @@ museum
 music
 musical
 musician
-Muslim
+uslim
 must
 mutual
 my
