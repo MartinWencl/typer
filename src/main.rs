@@ -34,7 +34,7 @@ struct MyArgs {
 
 fn main() -> io::Result<()> {
     // logging
-    SimpleLogger::new().env().init().unwrap();
+    // SimpleLogger::new().env().init().unwrap();
     log::info!("Initiliazed logger");
 
     let args = MyArgs::parse();
@@ -65,13 +65,13 @@ fn main() -> io::Result<()> {
     }
     log::info!("Frase created: {}", frase_str);
     
-    let mut stats = AlphabetStats::new("abcdefghijklmnopqrstuvwxyz".chars().collect());
     let mut frase = Frase::new(&frase_str);
+    let mut stats = AlphabetStats::new("abcdefghijklmnopqrstuvwxyz".chars().collect());
   
     terminal::enable_raw_mode()?;
 
     // Run
-    // TODO: Repeat run, util the user quits
+    // TODO: Repeat run, until the user quits
     let result = run(&mut frase, &mut stats);
 
     terminal::disable_raw_mode()?;

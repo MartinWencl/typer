@@ -1,13 +1,12 @@
 use std::io;
 use rand::prelude::*;
 use rand::distributions::{Distribution, Uniform};
-
 use crate::types::TextVariants;
 
 mod wordlist_types;
-
 mod wordlist;
 
+// TODO: Preferably move to a config file
 const FOX_TEXT : &str = "The quick brown fox jumps over the lazy dog";
 const MIN_GENERATED_FRASE_LEN : u8 = 100;
 const MAX_GENERATED_FRASE_LEN : u8 = u8::MAX;

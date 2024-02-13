@@ -65,6 +65,7 @@ impl LetterStats {
     }
 }
 
+// TODO: This is litterally a bool
 pub enum Outcomes {
     Correct,
     Wrong,
